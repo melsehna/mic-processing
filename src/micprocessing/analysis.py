@@ -130,8 +130,10 @@ def genResults(exp, threshPct=10, ax1Conc=None):
                     micConc = ax1Conc / (2 ** (mic['micCol'] - 1))
                 rows.append({
                     'strain': strain, 'plate': entry['plate'],
+                    'drawerName': entry.get('drawerName', ''),
+                    'plateName': entry.get('plateName', ''),
                     'measurement': measType, 'timepoint': tp,
-                    'micCol': mic['micCol'] if mic['micCol'] else '>10',
+                    'micCol': mic['micCol'],
                     'micConcUgml': f'{micConc:g}' if micConc else '',
                     'posCtrlMean': mic['posCtrlMean'],
                     'negCtrlMean': mic['negCtrlMean'],
@@ -147,24 +149,39 @@ def genTimecourseResults(exp, threshPct=10, ax1Conc=None):
         for measType in ['od', 'biomass']:
             for tp, colData in entry.get(measType, {}).items():
                 nTimepoints = min(v.shape[1] for v in colData.values())
+                # compute cumulative hour offset from timepoint label
+                baseHour = _tpBaseHour(tp)
                 for tIdx in range(nTimepoints):
                     mic = determineMic(colData, threshPct, tIdx=tIdx)
                     if mic is None:
                         continue
+                    micCol = mic['micCol']
                     micConc = None
-                    if ax1Conc and mic['micCol']:
-                        micConc = ax1Conc / (2 ** (mic['micCol'] - 1))
+                    if ax1Conc and micCol:
+                        micConc = ax1Conc / (2 ** (micCol - 1))
                     rows.append({
                         'strain': strain, 'plate': entry['plate'],
-                        'measurement': measType, 'timepoint': tp,
-                        'readIndex': tIdx, 'hour': tIdx,
-                        'micCol': mic['micCol'] if mic['micCol'] else '>10',
+                        'drawerName': entry.get('drawerName', ''),
+                        'plateName': entry.get('plateName', ''),
+                        'measurement': measType,
+                        'hour': baseHour + tIdx,
+                        'micCol': micCol,
                         'micConcUgml': f'{micConc:g}' if micConc else '',
                         'posCtrlMean': mic['posCtrlMean'],
                         'negCtrlMean': mic['negCtrlMean'],
                         'threshold': mic['threshold'],
                     })
     return pd.DataFrame(rows)
+
+
+def _tpBaseHour(tp):
+    m = re.match(r'^(\d+)-(\d+)h$', tp)
+    if m:
+        return int(m.group(1))
+    m = re.match(r'^(\d+)h$', tp)
+    if m:
+        return int(m.group(1))
+    return 0
 
 
 def genEndpointSummary(exp, ax1Conc=None):
@@ -178,6 +195,8 @@ def genEndpointSummary(exp, ax1Conc=None):
                     vals = vals[~np.isnan(vals)]
                     rows.append({
                         'strain': strain, 'plate': entry['plate'],
+                        'drawerName': entry.get('drawerName', ''),
+                        'plateName': entry.get('plateName', ''),
                         'measurement': measType, 'timepoint': tp,
                         'column': colNum, 'condition': _concLabel(colNum, ax1Conc),
                         'mean': round(np.mean(vals), 4),

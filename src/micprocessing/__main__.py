@@ -81,7 +81,7 @@ def main():
             plateTc = tcDf[tcDf['plate'] == plateNo]
             if not plateTc.empty:
                 plateTc.to_csv(plateDir / 'micTimecourse.csv', index=False)
-                print(f'  micTimecourse.csv ({plateTc["readIndex"].nunique()} timepoints)')
+                print(f'  micTimecourse.csv ({plateTc["hour"].nunique()} timepoints)')
 
         if not summaryDf.empty:
             plateSummary = summaryDf[summaryDf['plate'] == plateNo]
