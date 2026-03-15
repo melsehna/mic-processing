@@ -1,0 +1,202 @@
+import re
+import numpy as np
+import pandas as pd
+from pathlib import Path
+
+from .discover import (
+    discoverData, upperRows, lowerRows, allRows, concCols,
+    mediaCtrlCol, growthCtrlCol,
+)
+from .parsers import parseBiomassCsv, parseOdCsv
+
+
+def loadPlateId(plateIdPath):
+    plateIdPath = Path(plateIdPath)
+    if not plateIdPath.exists():
+        return None
+
+    xl = pd.ExcelFile(plateIdPath)
+    strainMap = {}
+    for sheet in xl.sheet_names:
+        m = re.search(r"P(\d+)", sheet)
+        if not m:
+            continue
+        plateNo = int(m.group(1))
+        df = pd.read_excel(xl, sheet, header=None)
+        upper, lower = set(), set()
+        for _, row in df.iterrows():
+            well = str(row.iloc[0]).strip()
+            strain = str(row.iloc[1]).strip()
+            if well and well[0] in "ABCD":
+                upper.add(strain)
+            elif well and well[0] in "EFGH":
+                lower.add(strain)
+        strainMap[plateNo] = {
+            "upper": upper.pop() if len(upper) == 1 else f"P{plateNo}-1",
+            "lower": lower.pop() if len(lower) == 1 else f"P{plateNo}-2",
+        }
+    return strainMap
+
+
+def loadExp(dataDir, plateIdPath=None):
+    fileMap = discoverData(dataDir)
+    strainMap = loadPlateId(plateIdPath) if plateIdPath else None
+
+    exp = {}
+    for plateNo in sorted(fileMap.keys()):
+        plateData = fileMap[plateNo]
+
+        for group, rows in [("upper", upperRows), ("lower", lowerRows)]:
+            if strainMap and plateNo in strainMap:
+                name = strainMap[plateNo][group]
+            else:
+                name = f"P{plateNo}-{'1' if group == 'upper' else '2'}"
+
+            entry = {"plate": plateNo, "rows": rows, "od": {}, "biomass": {}}
+
+            for tp, fpath in plateData.get("od", []):
+                entry["od"][tp] = _extractByCols(parseOdCsv(fpath), rows)
+            for tp, fpath in plateData.get("biomass", []):
+                entry["biomass"][tp] = _extractByCols(parseBiomassCsv(fpath), rows)
+
+            exp[name] = entry
+
+    return exp
+
+
+def _extractByCols(wellData, rows):
+    result = {}
+    for col in range(1, 13):
+        reps = [wellData[f"{r}{col}"] for r in rows if f"{r}{col}" in wellData and len(wellData[f"{r}{col}"]) > 0]
+        if not reps:
+            continue
+        maxLen = max(len(r) for r in reps)
+        padded = [np.pad(r, (0, maxLen - len(r)), constant_values=np.nan) if len(r) < maxLen else r for r in reps]
+        result[col] = np.array(padded)
+    return result
+
+
+def determineMic(colData, threshPct=10):
+    if not colData:
+        return None
+    posVals = colData.get(growthCtrlCol)
+    if posVals is None:
+        return None
+    posEnd = np.nanmean(posVals[:, -1])
+
+    negVals = colData.get(mediaCtrlCol)
+    negEnd = np.nanmean(negVals[:, -1]) if negVals is not None else 0.0
+    thresh = negEnd + (threshPct / 100) * (posEnd - negEnd)
+
+    micCol = None
+    for col in range(max(concCols), 0, -1):
+        if col not in colData:
+            continue
+        if np.nanmean(colData[col][:, -1]) < thresh:
+            micCol = col
+        else:
+            break
+
+    return {"micCol": micCol, "posCtrlMean": round(posEnd, 4),
+            "negCtrlMean": round(negEnd, 4), "threshold": round(thresh, 4)}
+
+
+def genResults(exp, threshPct=10, ax1Conc=None):
+    rows = []
+    for strain in sorted(exp.keys()):
+        entry = exp[strain]
+        for measType in ["od", "biomass"]:
+            for tp, colData in entry.get(measType, {}).items():
+                mic = determineMic(colData, threshPct)
+                if mic is None:
+                    continue
+                micConc = None
+                if ax1Conc and mic["micCol"]:
+                    micConc = ax1Conc / (2 ** (mic["micCol"] - 1))
+                rows.append({
+                    "strain": strain, "plate": entry["plate"],
+                    "measurement": measType, "timepoint": tp,
+                    "micCol": mic["micCol"] if mic["micCol"] else ">10",
+                    "micConcUgml": f"{micConc:g}" if micConc else "",
+                    "posCtrlMean": mic["posCtrlMean"],
+                    "negCtrlMean": mic["negCtrlMean"],
+                    "threshold": mic["threshold"],
+                })
+    return pd.DataFrame(rows)
+
+
+def genEndpointSummary(exp, ax1Conc=None):
+    rows = []
+    for strain in sorted(exp.keys()):
+        entry = exp[strain]
+        for measType in ["od", "biomass"]:
+            for tp, colData in entry.get(measType, {}).items():
+                for colNum in sorted(colData.keys()):
+                    vals = colData[colNum][:, -1]
+                    vals = vals[~np.isnan(vals)]
+                    rows.append({
+                        "strain": strain, "plate": entry["plate"],
+                        "measurement": measType, "timepoint": tp,
+                        "column": colNum, "condition": _concLabel(colNum, ax1Conc),
+                        "mean": round(np.mean(vals), 4),
+                        "sd": round(np.std(vals), 4), "n": len(vals),
+                    })
+    return pd.DataFrame(rows)
+
+
+def genIndex(dataDir, plateIdPath=None, ax1Conc=None):
+    dataDir = Path(dataDir)
+    fileMap = discoverData(dataDir)
+    strainMap = loadPlateId(plateIdPath) if plateIdPath else None
+
+    rows = []
+    for plateNo in sorted(fileMap.keys()):
+        plateData = fileMap[plateNo]
+        odPath = _pickTsPath(plateData.get("od", []))
+        biomassPath = _pickTsPath(plateData.get("biomass", []))
+
+        for rowLetter in allRows:
+            if strainMap and plateNo in strainMap:
+                group = "upper" if rowLetter in upperRows else "lower"
+                plateId = strainMap[plateNo][group]
+            else:
+                group = "1" if rowLetter in upperRows else "2"
+                plateId = f"P{plateNo}-{group}"
+
+            for colNum in range(1, 13):
+                if colNum == mediaCtrlCol:
+                    conc = "media_ctrl"
+                elif colNum == growthCtrlCol:
+                    conc = "growth_ctrl"
+                elif ax1Conc is not None:
+                    conc = ax1Conc / (2 ** (colNum - 1))
+                else:
+                    conc = f"Ax1/{2 ** (colNum - 1)}" if colNum > 1 else "Ax1"
+
+                rows.append({
+                    "plateId": plateId, "wellId": f"{rowLetter}{colNum}",
+                    "plateNo": plateNo, "biomassPath": biomassPath,
+                    "odPath": odPath, "axConc": conc,
+                })
+
+    return pd.DataFrame(rows)
+
+
+def _pickTsPath(fileList):
+    if not fileList:
+        return ""
+    for tp, fpath in fileList:
+        if "0-24" in tp or "24" in tp:
+            return str(fpath)
+    return str(fileList[0][1])
+
+
+def _concLabel(colNum, ax1Conc=None):
+    if colNum == mediaCtrlCol:
+        return "Media ctrl"
+    elif colNum == growthCtrlCol:
+        return "Growth ctrl"
+    elif ax1Conc is not None:
+        return f"{ax1Conc / (2 ** (colNum - 1)):g} ug/mL"
+    else:
+        return "Ax1" if colNum == 1 else f"Ax1/{2 ** (colNum - 1)}"
