@@ -137,9 +137,7 @@ def genResults(exp, threshPct=10, ax1Conc=None):
                 mic = determineMic(colData, threshPct)
                 if mic is None:
                     continue
-                micConc = None
-                if ax1Conc and mic['micCol']:
-                    micConc = ax1Conc / (2 ** (mic['micCol'] - 1))
+                micCol = mic['micCol']
                 rows.append({
                     'strain': strain, 'posId': entry['posId'],
                     'plate': entry['plate'],
@@ -147,8 +145,8 @@ def genResults(exp, threshPct=10, ax1Conc=None):
                     'plateName': entry.get('plateName', ''),
                     'rows': ','.join(entry['rows']),
                     'measurement': measType, 'timepoint': tp,
-                    'micCol': mic['micCol'],
-                    'micConcUgml': f'{micConc:g}' if micConc else '',
+                    'micCol': micCol,
+                    'micConc': _concLabel(int(micCol), ax1Conc) if micCol is not None and not np.isnan(micCol) else '',
                     'posCtrlMean': mic['posCtrlMean'],
                     'negCtrlMean': mic['negCtrlMean'],
                     'threshold': mic['threshold'],
@@ -170,9 +168,6 @@ def genTimecourseResults(exp, threshPct=10, ax1Conc=None):
                     if mic is None:
                         continue
                     micCol = mic['micCol']
-                    micConc = None
-                    if ax1Conc and micCol:
-                        micConc = ax1Conc / (2 ** (micCol - 1))
                     rows.append({
                         'strain': strain, 'plate': entry['plate'],
                         'drawerName': entry.get('drawerName', ''),
@@ -181,7 +176,7 @@ def genTimecourseResults(exp, threshPct=10, ax1Conc=None):
                         'measurement': measType,
                         'hour': baseHour + tIdx,
                         'micCol': micCol,
-                        'micConcUgml': f'{micConc:g}' if micConc else '',
+                        'micConc': _concLabel(int(micCol), ax1Conc) if micCol is not None and not np.isnan(micCol) else '',
                         'posCtrlMean': mic['posCtrlMean'],
                         'negCtrlMean': mic['negCtrlMean'],
                         'threshold': mic['threshold'],
