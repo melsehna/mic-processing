@@ -5,7 +5,7 @@ from pathlib import Path
 
 from .discover import (
     discoverData, upperRows, lowerRows, allRows, concCols,
-    mediaCtrlCol, growthCtrlCol,
+    mediaCtrl, growthCtrl,
 )
 from .parsers import parseBiomassCsv, parseOdCsv
 
@@ -83,12 +83,12 @@ def _extractByCols(wellData, rows):
 def determineMic(colData, threshPct=10):
     if not colData:
         return None
-    posVals = colData.get(growthCtrlCol)
+    posVals = colData.get(growthCtrl)
     if posVals is None:
         return None
     posEnd = np.nanmean(posVals[:, -1])
 
-    negVals = colData.get(mediaCtrlCol)
+    negVals = colData.get(mediaCtrl)
     negEnd = np.nanmean(negVals[:, -1]) if negVals is not None else 0.0
     thresh = negEnd + (threshPct / 100) * (posEnd - negEnd)
 
@@ -176,9 +176,9 @@ def genIndex(dataDir, plateIdPath=None, ax1Conc=None):
                 plateId = f'P{plateNo}-{group}'
 
             for colNum in range(1, 13):
-                if colNum == mediaCtrlCol:
+                if colNum == mediaCtrl:
                     conc = 'media_ctrl'
-                elif colNum == growthCtrlCol:
+                elif colNum == growthCtrl:
                     conc = 'growth_ctrl'
                 elif ax1Conc is not None:
                     conc = ax1Conc / (2 ** (colNum - 1))
@@ -204,9 +204,9 @@ def _pickTsPath(fileList):
 
 
 def _concLabel(colNum, ax1Conc=None):
-    if colNum == mediaCtrlCol:
+    if colNum == mediaCtrl:
         return 'Media ctrl'
-    elif colNum == growthCtrlCol:
+    elif colNum == growthCtrl:
         return 'Growth ctrl'
     elif ax1Conc is not None:
         return f'{ax1Conc / (2 ** (colNum - 1)):g} ug/mL'
