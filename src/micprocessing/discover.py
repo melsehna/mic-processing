@@ -59,40 +59,66 @@ def _tryNested(dataDir):
         if not drawerDir.is_dir():
             continue
 
-        plateNo = None
-        plateSubdir = None
-        for child in drawerDir.iterdir():
+        # Check for Drawer number in dir name (one plate per drawer)
+        drawerMatch = re.search(r'Drawer\s*(\d+)', drawerDir.name, re.IGNORECASE)
+
+        # Find Plate subdirectories
+        plateSubdirs = []
+        for child in sorted(drawerDir.iterdir()):
             if child.is_dir():
                 m = re.search(r'Plate\s*(\d+)', child.name, re.IGNORECASE)
                 if m:
-                    plateNo = int(m.group(1))
-                    plateSubdir = child
+                    plateSubdirs.append((int(m.group(1)), child))
+
+        if drawerMatch:
+            # Single-plate drawer: Drawer number is the plate number
+            plateNo = int(drawerMatch.group(1))
+            plateSubdir = plateSubdirs[0][1] if plateSubdirs else None
+
+            if plateNo not in result:
+                result[plateNo] = {
+                    'od': [], 'biomass': [],
+                    'drawerName': drawerDir.name,
+                    'plateName': plateSubdir.name if plateSubdir else None,
+                }
+
+            tp = _inferTimepoint(drawerDir, dataDir)
+
+            for csvPath in sorted(drawerDir.glob('*.csv')):
+                if csvPath.is_file():
+                    result[plateNo]['od'].append((tp, csvPath))
                     break
-        if plateNo is None:
-            m = re.search(r'Drawer\s*(\d+)', drawerDir.name, re.IGNORECASE)
-            if m:
-                plateNo = int(m.group(1))
-            else:
-                continue
 
-        if plateNo not in result:
-            result[plateNo] = {
-                'od': [], 'biomass': [],
-                'drawerName': drawerDir.name,
-                'plateName': plateSubdir.name if plateSubdir else None,
-            }
+            if plateSubdir is not None:
+                biomassPath = plateSubdir / 'Numerical data' / '4x_BF_biomass.csv'
+                if biomassPath.exists():
+                    result[plateNo]['biomass'].append((tp, biomassPath))
 
-        tp = _inferTimepoint(drawerDir, dataDir)
+        elif plateSubdirs:
+            # Multi-plate directory (e.g. 72h endpoint): one subdir per plate
+            tp = _inferTimepoint(drawerDir, dataDir)
 
-        for csvPath in sorted(drawerDir.glob('*.csv')):
-            if csvPath.is_file():
-                result[plateNo]['od'].append((tp, csvPath))
-                break
+            # Match CSVs to plate numbers via _P<n> in filename
+            csvsByPlate = {}
+            for csvPath in sorted(drawerDir.glob('*.csv')):
+                m = re.search(r'_P(\d+)', csvPath.name, re.IGNORECASE)
+                if m:
+                    csvsByPlate[int(m.group(1))] = csvPath
 
-        if plateSubdir is not None:
-            biomassPath = plateSubdir / 'Numerical data' / '4x_BF_biomass.csv'
-            if biomassPath.exists():
-                result[plateNo]['biomass'].append((tp, biomassPath))
+            for plateNo, plateSubdir in plateSubdirs:
+                if plateNo not in result:
+                    result[plateNo] = {
+                        'od': [], 'biomass': [],
+                        'drawerName': drawerDir.name,
+                        'plateName': plateSubdir.name,
+                    }
+
+                if plateNo in csvsByPlate:
+                    result[plateNo]['od'].append((tp, csvsByPlate[plateNo]))
+
+                biomassPath = plateSubdir / 'Numerical data' / '4x_BF_biomass.csv'
+                if biomassPath.exists():
+                    result[plateNo]['biomass'].append((tp, biomassPath))
 
     return result if result else None
 
