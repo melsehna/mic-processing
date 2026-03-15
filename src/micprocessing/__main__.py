@@ -22,10 +22,21 @@ def main():
 
     plateIdPath = args.plateId
     if plateIdPath is None:
-        for candidate in list(dataDir.glob('*Plate*ID*.xlsx')) + list(dataDir.parent.glob('*Plate*ID*.xlsx')):
-            plateIdPath = candidate
-            print(f'Auto-detected plate ID file: {candidate.name}')
-            break
+        searchDirs = [
+            dataDir,
+            dataDir.parent,
+            Path.cwd(),
+            Path.cwd() / 'reference',
+        ]
+        for d in searchDirs:
+            if not d.is_dir():
+                continue
+            for candidate in d.glob('*Plate*ID*.xlsx'):
+                plateIdPath = candidate
+                print(f'Auto-detected plate ID file: {candidate}')
+                break
+            if plateIdPath:
+                break
 
     print(f'Data directory: {dataDir}')
     print(f'Output directory: {outputDir}')
