@@ -82,7 +82,15 @@ def main():
                 plateSummary.to_csv(plateDir / 'endpointSummary.csv', index=False)
                 print(f'  endpointSummary.csv')
 
-    print('\nDone.')
+    # Master CSVs across all plates
+    if not indexDf.empty:
+        indexDf.to_csv(outputDir / 'plateIndex.csv', index=False)
+    if not micDf.empty:
+        micDf.to_csv(outputDir / 'micResults.csv', index=False)
+    if not summaryDf.empty:
+        summaryDf.to_csv(outputDir / 'endpointSummary.csv', index=False)
+    print(f'\nMaster CSVs saved to {outputDir}')
+    print('Done.')
 
 
 if __name__ == '__main__':
