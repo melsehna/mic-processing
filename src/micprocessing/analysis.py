@@ -80,6 +80,9 @@ def _extractByCols(wellData, rows):
     return result
 
 
+MIN_GROWTH_DELTA = 0.05
+
+
 def determineMic(colData, threshPct=10, tIdx=-1):
     if not colData:
         return None
@@ -93,7 +96,13 @@ def determineMic(colData, threshPct=10, tIdx=-1):
         negEnd = np.nanmean(negVals[:, tIdx])
     else:
         negEnd = 0.0
-    thresh = negEnd + (threshPct / 100) * (posEnd - negEnd)
+
+    growthDelta = posEnd - negEnd
+    if growthDelta < MIN_GROWTH_DELTA:
+        return {'micCol': None, 'posCtrlMean': round(posEnd, 4),
+                'negCtrlMean': round(negEnd, 4), 'threshold': None}
+
+    thresh = negEnd + (threshPct / 100) * growthDelta
 
     growing = {}
     for col in concCols:

@@ -6,8 +6,8 @@ lowerRows = list('EFGH')
 allRows = upperRows + lowerRows
 numCols = 12
 concCols = list(range(1, 11))
-mediaCtrl = 11
-growthCtrl = 12
+growthCtrl = 11
+mediaCtrl = 12
 
 
 def discoverData(dataDir):
