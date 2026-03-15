@@ -22,14 +22,18 @@ def parseOdCsv(csvPath):
         lines = f.readlines()
 
     startRow = None
+    endRow = None
     for i, line in enumerate(lines):
         if line.startswith('Time') and 'A1' in line:
             startRow = i
+        elif startRow is not None and line.strip().startswith('Results'):
+            endRow = i
             break
 
     if startRow is not None:
+        nrows = (endRow - startRow - 1) if endRow else None
         df = pd.read_csv(
-            csvPath, skiprows=startRow, encoding='latin1',
+            csvPath, skiprows=startRow, nrows=nrows, encoding='latin1',
             engine='python', sep=None, on_bad_lines='skip'
         )
         df = df.loc[:, ~df.columns.astype(str).str.contains('^Unnamed')]

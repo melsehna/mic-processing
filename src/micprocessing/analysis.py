@@ -83,7 +83,7 @@ def _extractByCols(wellData, rows):
     return result
 
 
-MIN_GROWTH_DELTA = 0.05
+MIN_GROWTH_DELTA = 0.1
 
 
 def determineMic(colData, threshPct=10, tIdx=-1):
