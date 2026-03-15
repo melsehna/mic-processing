@@ -1,0 +1,20 @@
+[build-system]
+requires = ["setuptools>=68.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "micprocessing"
+version = "0.1.0"
+description = "Automated MIC analysis for Cytation plate reader output"
+requires-python = ">=3.9"
+dependencies = [
+    "numpy",
+    "pandas",
+    "openpyxl",
+]
+
+[project.scripts]
+micprocessing = "micprocessing.__main__:main"
+
+[tool.setuptools.packages.find]
+where = ["src"]
