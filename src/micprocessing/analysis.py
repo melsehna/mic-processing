@@ -102,7 +102,8 @@ def determineMic(colData, threshPct=10, tIdx=-1):
 
     growthDelta = posEnd - negEnd
     if growthDelta < MIN_GROWTH_DELTA:
-        return {'micCol': None, 'posCtrlMean': round(posEnd, 4),
+        return {'micCol': None, 'status': 'no_growth',
+                'posCtrlMean': round(posEnd, 4),
                 'negCtrlMean': round(negEnd, 4), 'threshold': None}
 
     thresh = negEnd + (threshPct / 100) * growthDelta
@@ -124,7 +125,15 @@ def determineMic(colData, threshPct=10, tIdx=-1):
             elif col + 1 > max(concCols) and nextGrows:
                 micCol = col
 
-    return {'micCol': micCol, 'posCtrlMean': round(posEnd, 4),
+    if micCol is not None:
+        status = 'mic'
+    elif all(growing.get(c, False) for c in concCols if c in growing):
+        status = 'completeGrowth'
+    else:
+        status = 'indeterminate'
+
+    return {'micCol': micCol, 'status': status,
+            'posCtrlMean': round(posEnd, 4),
             'negCtrlMean': round(negEnd, 4), 'threshold': round(thresh, 4)}
 
 
@@ -147,6 +156,7 @@ def genResults(exp, threshPct=10, ax1Conc=None):
                     'measurement': measType, 'timepoint': tp,
                     'micCol': micCol,
                     'micConc': _concLabel(int(micCol), ax1Conc) if micCol is not None and not np.isnan(micCol) else '',
+                    'status': mic['status'],
                     'posCtrlMean': mic['posCtrlMean'],
                     'negCtrlMean': mic['negCtrlMean'],
                     'threshold': mic['threshold'],
@@ -177,6 +187,7 @@ def genTimecourseResults(exp, threshPct=10, ax1Conc=None):
                         'hour': baseHour + tIdx,
                         'micCol': micCol,
                         'micConc': _concLabel(int(micCol), ax1Conc) if micCol is not None and not np.isnan(micCol) else '',
+                        'status': mic['status'],
                         'posCtrlMean': mic['posCtrlMean'],
                         'negCtrlMean': mic['negCtrlMean'],
                         'threshold': mic['threshold'],
