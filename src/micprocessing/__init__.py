@@ -1,1 +1,1 @@
-"""micProcessing - automated MIC analysis for Cytation plate reader output."""
+'micProcessing - automated MIC analysis for Cytation plate reader output.'
