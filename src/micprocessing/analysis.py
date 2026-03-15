@@ -102,7 +102,12 @@ def determineMic(colData, threshPct=10, tIdx=-1):
 
     growthDelta = posEnd - negEnd
     if growthDelta < MIN_GROWTH_DELTA:
-        return {'micCol': None, 'status': 'no_growth',
+        if posEnd >= MIN_GROWTH_DELTA:
+            # growth ctrl grew but all wells are near media ctrl level
+            return {'micCol': 1, 'status': 'belowRange',
+                    'posCtrlMean': round(posEnd, 4),
+                    'negCtrlMean': round(negEnd, 4), 'threshold': None}
+        return {'micCol': None, 'status': 'noGrowth',
                 'posCtrlMean': round(posEnd, 4),
                 'negCtrlMean': round(negEnd, 4), 'threshold': None}
 
