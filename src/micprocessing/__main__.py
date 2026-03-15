@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
 
-from .analysis import loadExp, genResults, genEndpointSummary, genIndex
+from .analysis import loadExp, genResults, genTimecourseResults, genEndpointSummary, genIndex
 
 
 def main():
@@ -50,6 +50,7 @@ def main():
 
     indexDf = genIndex(dataDir, plateIdPath=plateIdPath, ax1Conc=args.ax1Conc)
     micDf = genResults(exp, threshPct=args.threshold, ax1Conc=args.ax1Conc)
+    tcDf = genTimecourseResults(exp, threshPct=args.threshold, ax1Conc=args.ax1Conc)
     summaryDf = genEndpointSummary(exp, ax1Conc=args.ax1Conc)
 
     for plateNo in sorted(plateInfo.keys()):
@@ -76,6 +77,12 @@ def main():
                 print(f'  micResults.csv')
                 print(plateMic.to_string(index=False))
 
+        if not tcDf.empty:
+            plateTc = tcDf[tcDf['plate'] == plateNo]
+            if not plateTc.empty:
+                plateTc.to_csv(plateDir / 'micTimecourse.csv', index=False)
+                print(f'  micTimecourse.csv ({plateTc["readIndex"].nunique()} timepoints)')
+
         if not summaryDf.empty:
             plateSummary = summaryDf[summaryDf['plate'] == plateNo]
             if not plateSummary.empty:
@@ -87,6 +94,8 @@ def main():
         indexDf.to_csv(outputDir / 'plateIndex.csv', index=False)
     if not micDf.empty:
         micDf.to_csv(outputDir / 'micResults.csv', index=False)
+    if not tcDf.empty:
+        tcDf.to_csv(outputDir / 'micTimecourse.csv', index=False)
     if not summaryDf.empty:
         summaryDf.to_csv(outputDir / 'endpointSummary.csv', index=False)
     print(f'\nMaster CSVs saved to {outputDir}')

@@ -80,22 +80,25 @@ def _extractByCols(wellData, rows):
     return result
 
 
-def determineMic(colData, threshPct=10):
+def determineMic(colData, threshPct=10, tIdx=-1):
     if not colData:
         return None
     posVals = colData.get(growthCtrl)
-    if posVals is None:
+    if posVals is None or tIdx >= posVals.shape[1]:
         return None
-    posEnd = np.nanmean(posVals[:, -1])
+    posEnd = np.nanmean(posVals[:, tIdx])
 
     negVals = colData.get(mediaCtrl)
-    negEnd = np.nanmean(negVals[:, -1]) if negVals is not None else 0.0
+    if negVals is not None and tIdx < negVals.shape[1]:
+        negEnd = np.nanmean(negVals[:, tIdx])
+    else:
+        negEnd = 0.0
     thresh = negEnd + (threshPct / 100) * (posEnd - negEnd)
 
     growing = {}
     for col in concCols:
-        if col in colData:
-            growing[col] = np.nanmean(colData[col][:, -1]) >= thresh
+        if col in colData and tIdx < colData[col].shape[1]:
+            growing[col] = np.nanmean(colData[col][:, tIdx]) >= thresh
 
     micCol = None
     for col in range(max(concCols), 0, -1):
@@ -134,6 +137,33 @@ def genResults(exp, threshPct=10, ax1Conc=None):
                     'negCtrlMean': mic['negCtrlMean'],
                     'threshold': mic['threshold'],
                 })
+    return pd.DataFrame(rows)
+
+
+def genTimecourseResults(exp, threshPct=10, ax1Conc=None):
+    rows = []
+    for strain in sorted(exp.keys()):
+        entry = exp[strain]
+        for measType in ['od', 'biomass']:
+            for tp, colData in entry.get(measType, {}).items():
+                nTimepoints = min(v.shape[1] for v in colData.values())
+                for tIdx in range(nTimepoints):
+                    mic = determineMic(colData, threshPct, tIdx=tIdx)
+                    if mic is None:
+                        continue
+                    micConc = None
+                    if ax1Conc and mic['micCol']:
+                        micConc = ax1Conc / (2 ** (mic['micCol'] - 1))
+                    rows.append({
+                        'strain': strain, 'plate': entry['plate'],
+                        'measurement': measType, 'timepoint': tp,
+                        'readIndex': tIdx, 'hour': tIdx,
+                        'micCol': mic['micCol'] if mic['micCol'] else '>10',
+                        'micConcUgml': f'{micConc:g}' if micConc else '',
+                        'posCtrlMean': mic['posCtrlMean'],
+                        'negCtrlMean': mic['negCtrlMean'],
+                        'threshold': mic['threshold'],
+                    })
     return pd.DataFrame(rows)
 
 
