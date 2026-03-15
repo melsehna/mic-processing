@@ -52,8 +52,11 @@ def loadExp(dataDir, plateIdPath=None):
             else:
                 name = f'P{plateNo}-{"1" if group == "upper" else "2"}'
 
+            posId = f'P{plateNo}-{"1" if group == "upper" else "2"}'
+
             entry = {
-                'plate': plateNo, 'rows': rows, 'od': {}, 'biomass': {},
+                'plate': plateNo, 'posId': posId,
+                'rows': rows, 'od': {}, 'biomass': {},
                 'drawerName': plateData.get('drawerName'),
                 'plateName': plateData.get('plateName'),
             }
@@ -138,7 +141,8 @@ def genResults(exp, threshPct=10, ax1Conc=None):
                 if ax1Conc and mic['micCol']:
                     micConc = ax1Conc / (2 ** (mic['micCol'] - 1))
                 rows.append({
-                    'strain': strain, 'plate': entry['plate'],
+                    'strain': strain, 'posId': entry['posId'],
+                    'plate': entry['plate'],
                     'drawerName': entry.get('drawerName', ''),
                     'plateName': entry.get('plateName', ''),
                     'rows': ','.join(entry['rows']),
