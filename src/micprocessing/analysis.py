@@ -158,6 +158,9 @@ def genResults(exp, threshPct=10, ax1Conc=None):
                 if mic is None:
                     continue
                 micCol = mic['micCol']
+                micWellMean = ''
+                if micCol is not None and not np.isnan(micCol) and int(micCol) in colData:
+                    micWellMean = round(np.nanmean(colData[int(micCol)][:, -1]), 4)
                 rows.append({
                     'strain': strain, 'posId': entry['posId'],
                     'plate': entry['plate'],
@@ -167,6 +170,7 @@ def genResults(exp, threshPct=10, ax1Conc=None):
                     'measurement': measType, 'timepoint': tp,
                     'micCol': micCol,
                     'micConc': _concLabel(int(micCol), ax1Conc) if micCol is not None and not np.isnan(micCol) else '',
+                    'micWellMean': micWellMean,
                     'status': mic['status'],
                     'posCtrlMean': mic['posCtrlMean'],
                     'negCtrlMean': mic['negCtrlMean'],
@@ -189,6 +193,9 @@ def genTimecourseResults(exp, threshPct=10, ax1Conc=None):
                     if mic is None:
                         continue
                     micCol = mic['micCol']
+                    micWellMean = ''
+                    if micCol is not None and not np.isnan(micCol) and int(micCol) in colData:
+                        micWellMean = round(np.nanmean(colData[int(micCol)][:, tIdx]), 4)
                     rows.append({
                         'strain': strain, 'plate': entry['plate'],
                         'drawerName': entry.get('drawerName', ''),
@@ -198,6 +205,7 @@ def genTimecourseResults(exp, threshPct=10, ax1Conc=None):
                         'hour': baseHour + tIdx,
                         'micCol': micCol,
                         'micConc': _concLabel(int(micCol), ax1Conc) if micCol is not None and not np.isnan(micCol) else '',
+                        'micWellMean': micWellMean,
                         'status': mic['status'],
                         'posCtrlMean': mic['posCtrlMean'],
                         'negCtrlMean': mic['negCtrlMean'],
