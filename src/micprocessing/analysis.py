@@ -52,13 +52,19 @@ def loadExp(dataDir, plateIdPath=None):
             else:
                 name = f'P{plateNo}-{"1" if group == "upper" else "2"}'
 
-            posId = f'P{plateNo}-{"1" if group == "upper" else "2"}'
+            groupNum = '1' if group == 'upper' else '2'
+            drawerName = plateData.get('drawerName')
+            plateName = plateData.get('plateName')
+            if drawerName and plateName:
+                posId = f'{drawerName}/{plateName}-{groupNum}'
+            else:
+                posId = f'P{plateNo}-{groupNum}'
 
             entry = {
                 'plate': plateNo, 'posId': posId,
                 'rows': rows, 'od': {}, 'biomass': {},
-                'drawerName': plateData.get('drawerName'),
-                'plateName': plateData.get('plateName'),
+                'drawerName': drawerName,
+                'plateName': plateName,
             }
 
             for tp, fpath in plateData.get('od', []):
@@ -243,13 +249,22 @@ def genIndex(dataDir, plateIdPath=None, ax1Conc=None):
         odPath = _pickTsPath(plateData.get('od', []))
         biomassPath = _pickTsPath(plateData.get('biomass', []))
 
+        drawerName = plateData.get('drawerName')
+        plateName = plateData.get('plateName')
+
         for rowLetter in allRows:
+            group = 'upper' if rowLetter in upperRows else 'lower'
+            groupNum = '1' if group == 'upper' else '2'
+
             if strainMap and plateNo in strainMap:
-                group = 'upper' if rowLetter in upperRows else 'lower'
-                plateId = strainMap[plateNo][group]
+                strain = strainMap[plateNo][group]
             else:
-                group = '1' if rowLetter in upperRows else '2'
-                plateId = f'P{plateNo}-{group}'
+                strain = ''
+
+            if drawerName and plateName:
+                posId = f'{drawerName}/{plateName}-{groupNum}'
+            else:
+                posId = f'P{plateNo}-{groupNum}'
 
             for colNum in range(1, 13):
                 if colNum == mediaCtrl:
@@ -262,7 +277,8 @@ def genIndex(dataDir, plateIdPath=None, ax1Conc=None):
                     conc = f'Ax1/{2 ** (colNum - 1)}' if colNum > 1 else 'Ax1'
 
                 rows.append({
-                    'plateId': plateId, 'wellId': f'{rowLetter}{colNum}',
+                    'strain': strain, 'posId': posId,
+                    'wellId': f'{rowLetter}{colNum}',
                     'plateNo': plateNo, 'biomassPath': biomassPath,
                     'odPath': odPath, 'axConc': conc,
                 })
