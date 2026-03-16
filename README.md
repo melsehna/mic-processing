@@ -1,6 +1,4 @@
-# micprocessing
-
-Automated MIC (Minimum Inhibitory Concentration) analysis for Cytation plate reader output.
+# Bulk Cytation5 MIC Analysis
 
 ## Overview
 
