@@ -38,16 +38,20 @@ def loadPlateId(plateIdPath):
     return strainMap
 
 
-def loadExp(dataDir, plateIdPath=None):
+def loadExp(dataDir, plateIdPath=None, config=None):
     fileMap = discoverData(dataDir)
     strainMap = loadPlateId(plateIdPath) if plateIdPath else None
 
     exp = {}
     for plateNo in sorted(fileMap.keys()):
         plateData = fileMap[plateNo]
+        plateCfg = config.plateConfig(plateNo) if config else None
 
         for group, rows in [('upper', upperRows), ('lower', lowerRows)]:
-            if strainMap and plateNo in strainMap:
+            # Resolve strain name: config > plateId xlsx > fallback
+            if plateCfg and (group == 'upper' and plateCfg.strainUpper or group == 'lower' and plateCfg.strainLower):
+                name = plateCfg.strainUpper if group == 'upper' else plateCfg.strainLower
+            elif strainMap and plateNo in strainMap:
                 name = strainMap[plateNo][group]
             else:
                 name = f'P{plateNo}-{"1" if group == "upper" else "2"}'
@@ -60,11 +64,26 @@ def loadExp(dataDir, plateIdPath=None):
             else:
                 posId = f'P{plateNo}-{groupNum}'
 
+            # Resolve per-plate ax1Conc from config
+            entryAx1Conc = None
+            if plateCfg and plateCfg.ax1Conc is not None:
+                entryAx1Conc = plateCfg.ax1Conc
+            elif config and config.ax1Conc is not None:
+                entryAx1Conc = config.ax1Conc
+
+            entryAntibiotic = None
+            if plateCfg and plateCfg.antibiotic is not None:
+                entryAntibiotic = plateCfg.antibiotic
+            elif config and config.antibiotic is not None:
+                entryAntibiotic = config.antibiotic
+
             entry = {
-                'plate': plateNo, 'posId': posId,
+                'strain': name, 'plate': plateNo, 'posId': posId,
                 'rows': rows, 'od': {}, 'biomass': {},
                 'drawerName': drawerName,
                 'plateName': plateName,
+                'ax1Conc': entryAx1Conc,
+                'antibiotic': entryAntibiotic,
             }
 
             for tp, fpath in plateData.get('od', []):
@@ -72,7 +91,7 @@ def loadExp(dataDir, plateIdPath=None):
             for tp, fpath in plateData.get('biomass', []):
                 entry['biomass'][tp] = _extractByCols(parseBiomassCsv(fpath), rows)
 
-            exp[name] = entry
+            exp[posId] = entry
 
     return exp
 
@@ -150,8 +169,9 @@ def determineMic(colData, threshPct=10, tIdx=-1):
 
 def genResults(exp, threshPct=10, ax1Conc=None):
     rows = []
-    for strain in sorted(exp.keys()):
-        entry = exp[strain]
+    for posId in sorted(exp.keys()):
+        entry = exp[posId]
+        entryAx1Conc = entry.get('ax1Conc') or ax1Conc
         for measType in ['od', 'biomass']:
             for tp, colData in entry.get(measType, {}).items():
                 mic = determineMic(colData, threshPct)
@@ -162,14 +182,15 @@ def genResults(exp, threshPct=10, ax1Conc=None):
                 if micCol is not None and not np.isnan(micCol) and int(micCol) in colData:
                     micWellMean = round(np.nanmean(colData[int(micCol)][:, -1]), 4)
                 rows.append({
-                    'strain': strain, 'posId': entry['posId'],
+                    'strain': entry['strain'], 'posId': entry['posId'],
                     'plate': entry['plate'],
                     'drawerName': entry.get('drawerName', ''),
                     'plateName': entry.get('plateName', ''),
+                    'antibiotic': entry.get('antibiotic', ''),
                     'rows': ','.join(entry['rows']),
                     'measurement': measType, 'timepoint': tp,
                     'micCol': micCol,
-                    'micConc': _concLabel(int(micCol), ax1Conc) if micCol is not None and not np.isnan(micCol) else '',
+                    'micConc': _concLabel(int(micCol), entryAx1Conc) if micCol is not None and not np.isnan(micCol) else '',
                     'micWellMean': micWellMean,
                     'status': mic['status'],
                     'posCtrlMean': mic['posCtrlMean'],
@@ -181,8 +202,9 @@ def genResults(exp, threshPct=10, ax1Conc=None):
 
 def genTimecourseResults(exp, threshPct=10, ax1Conc=None):
     rows = []
-    for strain in sorted(exp.keys()):
-        entry = exp[strain]
+    for posId in sorted(exp.keys()):
+        entry = exp[posId]
+        entryAx1Conc = entry.get('ax1Conc') or ax1Conc
         for measType in ['od', 'biomass']:
             for tp, colData in entry.get(measType, {}).items():
                 nTimepoints = min(v.shape[1] for v in colData.values())
@@ -197,14 +219,15 @@ def genTimecourseResults(exp, threshPct=10, ax1Conc=None):
                     if micCol is not None and not np.isnan(micCol) and int(micCol) in colData:
                         micWellMean = round(np.nanmean(colData[int(micCol)][:, tIdx]), 4)
                     rows.append({
-                        'strain': strain, 'plate': entry['plate'],
+                        'strain': entry['strain'], 'plate': entry['plate'],
                         'drawerName': entry.get('drawerName', ''),
                         'plateName': entry.get('plateName', ''),
+                        'antibiotic': entry.get('antibiotic', ''),
                         'rows': ','.join(entry['rows']),
                         'measurement': measType,
                         'hour': baseHour + tIdx,
                         'micCol': micCol,
-                        'micConc': _concLabel(int(micCol), ax1Conc) if micCol is not None and not np.isnan(micCol) else '',
+                        'micConc': _concLabel(int(micCol), entryAx1Conc) if micCol is not None and not np.isnan(micCol) else '',
                         'micWellMean': micWellMean,
                         'status': mic['status'],
                         'posCtrlMean': mic['posCtrlMean'],
@@ -226,27 +249,29 @@ def _tpBaseHour(tp):
 
 def genEndpointSummary(exp, ax1Conc=None):
     rows = []
-    for strain in sorted(exp.keys()):
-        entry = exp[strain]
+    for posId in sorted(exp.keys()):
+        entry = exp[posId]
+        entryAx1Conc = entry.get('ax1Conc') or ax1Conc
         for measType in ['od', 'biomass']:
             for tp, colData in entry.get(measType, {}).items():
                 for colNum in sorted(colData.keys()):
                     vals = colData[colNum][:, -1]
                     vals = vals[~np.isnan(vals)]
                     rows.append({
-                        'strain': strain, 'plate': entry['plate'],
+                        'strain': entry['strain'], 'plate': entry['plate'],
                         'drawerName': entry.get('drawerName', ''),
                         'plateName': entry.get('plateName', ''),
+                        'antibiotic': entry.get('antibiotic', ''),
                         'rows': ','.join(entry['rows']),
                         'measurement': measType, 'timepoint': tp,
-                        'column': colNum, 'condition': _concLabel(colNum, ax1Conc),
+                        'column': colNum, 'condition': _concLabel(colNum, entryAx1Conc),
                         'mean': round(np.mean(vals), 4),
                         'sd': round(np.std(vals), 4), 'n': len(vals),
                     })
     return pd.DataFrame(rows)
 
 
-def genIndex(dataDir, plateIdPath=None, ax1Conc=None):
+def genIndex(dataDir, plateIdPath=None, ax1Conc=None, config=None):
     dataDir = Path(dataDir)
     fileMap = discoverData(dataDir)
     strainMap = loadPlateId(plateIdPath) if plateIdPath else None
@@ -260,11 +285,23 @@ def genIndex(dataDir, plateIdPath=None, ax1Conc=None):
         drawerName = plateData.get('drawerName')
         plateName = plateData.get('plateName')
 
+        plateCfg = config.plateConfig(plateNo) if config else None
+        plateAx1Conc = None
+        if plateCfg and plateCfg.ax1Conc is not None:
+            plateAx1Conc = plateCfg.ax1Conc
+        elif config and config.ax1Conc is not None:
+            plateAx1Conc = config.ax1Conc
+        elif ax1Conc is not None:
+            plateAx1Conc = ax1Conc
+
         for rowLetter in allRows:
             group = 'upper' if rowLetter in upperRows else 'lower'
             groupNum = '1' if group == 'upper' else '2'
 
-            if strainMap and plateNo in strainMap:
+            # Resolve strain: config > plateId > fallback
+            if plateCfg and (group == 'upper' and plateCfg.strainUpper or group == 'lower' and plateCfg.strainLower):
+                strain = plateCfg.strainUpper if group == 'upper' else plateCfg.strainLower
+            elif strainMap and plateNo in strainMap:
                 strain = strainMap[plateNo][group]
             else:
                 strain = ''
@@ -279,8 +316,8 @@ def genIndex(dataDir, plateIdPath=None, ax1Conc=None):
                     conc = 'media_ctrl'
                 elif colNum == growthCtrl:
                     conc = 'growth_ctrl'
-                elif ax1Conc is not None:
-                    conc = ax1Conc / (2 ** (colNum - 1))
+                elif plateAx1Conc is not None:
+                    conc = plateAx1Conc / (2 ** (colNum - 1))
                 else:
                     conc = f'Ax1/{2 ** (colNum - 1)}' if colNum > 1 else 'Ax1'
 

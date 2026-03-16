@@ -2,6 +2,7 @@ import argparse
 from pathlib import Path
 
 from .analysis import loadExp, genResults, genTimecourseResults, genEndpointSummary, genIndex
+from .config import loadConfig, findConfig, generateTemplate
 
 
 def main():
@@ -14,14 +15,45 @@ def main():
     parser.add_argument('--plateId', default=None, help='Path to Plate ID xlsx for strain names')
     parser.add_argument('--ax1Conc', type=float, default=None, help='Starting antibiotic concentration (ug/mL) in column 1')
     parser.add_argument('--threshold', type=float, default=10, help='MIC threshold as pct of growth range (default: 10)')
+    parser.add_argument('--config', default=None, help='Path to YAML config file')
+    parser.add_argument('--genConfig', action='store_true', help='Generate a template config file and exit')
 
     args = parser.parse_args()
     dataDir = Path(args.dataDir)
     outputDir = Path(args.outputDir) if args.outputDir else dataDir / 'results'
+
+    # --genConfig: generate template and exit
+    if args.genConfig:
+        outPath = generateTemplate(dataDir, args.config)
+        print(f'Generated config template: {outPath}')
+        return
+
     outputDir.mkdir(parents=True, exist_ok=True)
 
+    # Load config
+    config = None
+    configPath = args.config
+    if configPath:
+        config = loadConfig(configPath)
+        print(f'Loaded config: {configPath}')
+    else:
+        detected = findConfig(dataDir)
+        if detected:
+            config = loadConfig(detected)
+            print(f'Auto-detected config: {detected}')
+
+    # Config threshold/ax1Conc serve as defaults; CLI flags override
+    threshold = args.threshold
+    if threshold == 10 and config and config.threshold != 10:
+        threshold = config.threshold
+
+    ax1Conc = args.ax1Conc
+    if ax1Conc is None and config and config.ax1Conc is not None:
+        ax1Conc = config.ax1Conc
+
+    # plateId: config overrides xlsx, but xlsx still works as fallback
     plateIdPath = args.plateId
-    if plateIdPath is None:
+    if plateIdPath is None and config is None:
         searchDirs = [
             dataDir,
             dataDir.parent,
@@ -41,28 +73,30 @@ def main():
     print(f'Data directory: {dataDir}')
     print(f'Output directory: {outputDir}')
 
-    exp = loadExp(dataDir, plateIdPath=plateIdPath)
-    print(f'Loaded {len(exp)} strains: {", ".join(sorted(exp.keys()))}')
+    exp = loadExp(dataDir, plateIdPath=plateIdPath, config=config)
+    print(f'Loaded {len(exp)} strain positions:')
 
-    for strain in sorted(exp.keys()):
-        e = exp[strain]
-        print(f'  {strain} (Plate {e["plate"]}): OD={list(e["od"].keys())}, Biomass={list(e["biomass"].keys())}')
+    for posId in sorted(exp.keys()):
+        e = exp[posId]
+        print(f'  {e["strain"]} [{posId}] (Plate {e["plate"]}): OD={list(e["od"].keys())}, Biomass={list(e["biomass"].keys())}')
 
     plateInfo = {}
-    for strain, entry in exp.items():
+    for posId, entry in exp.items():
         pn = entry['plate']
         if pn not in plateInfo:
             plateInfo[pn] = {
                 'strains': [],
+                'posIds': [],
                 'drawerName': entry.get('drawerName'),
                 'plateName': entry.get('plateName'),
             }
-        plateInfo[pn]['strains'].append(strain)
+        plateInfo[pn]['strains'].append(entry['strain'])
+        plateInfo[pn]['posIds'].append(posId)
 
-    indexDf = genIndex(dataDir, plateIdPath=plateIdPath, ax1Conc=args.ax1Conc)
-    micDf = genResults(exp, threshPct=args.threshold, ax1Conc=args.ax1Conc)
-    tcDf = genTimecourseResults(exp, threshPct=args.threshold, ax1Conc=args.ax1Conc)
-    summaryDf = genEndpointSummary(exp, ax1Conc=args.ax1Conc)
+    indexDf = genIndex(dataDir, plateIdPath=plateIdPath, ax1Conc=ax1Conc, config=config)
+    micDf = genResults(exp, threshPct=threshold, ax1Conc=ax1Conc)
+    tcDf = genTimecourseResults(exp, threshPct=threshold, ax1Conc=ax1Conc)
+    summaryDf = genEndpointSummary(exp, ax1Conc=ax1Conc)
 
     for plateNo in sorted(plateInfo.keys()):
         info = plateInfo[plateNo]
