@@ -72,43 +72,44 @@ def main():
             plateDir = outputDir / f'plate{plateNo}'
         plateDir.mkdir(parents=True, exist_ok=True)
         strains = info['strains']
+        tag = '_'.join(sorted(strains))
         print(f'\nPlate {plateNo} ({", ".join(sorted(strains))}):')
         print(f'  -> {plateDir}')
 
         if not indexDf.empty:
             plateDf = indexDf[indexDf['plateNo'] == plateNo]
             if not plateDf.empty:
-                plateDf.to_csv(plateDir / 'plateIndex.csv', index=False)
-                print(f'  plateIndex.csv ({len(plateDf)} wells)')
+                plateDf.to_csv(plateDir / f'plateIndex_{tag}.csv', index=False)
+                print(f'  plateIndex_{tag}.csv ({len(plateDf)} wells)')
 
         if not micDf.empty:
             plateMic = micDf[micDf['plate'] == plateNo]
             if not plateMic.empty:
-                plateMic.to_csv(plateDir / 'micResults.csv', index=False)
-                print(f'  micResults.csv')
+                plateMic.to_csv(plateDir / f'micResults_{tag}.csv', index=False)
+                print(f'  micResults_{tag}.csv')
                 print(plateMic.to_string(index=False))
 
         if not tcDf.empty:
             plateTc = tcDf[tcDf['plate'] == plateNo]
             if not plateTc.empty:
-                plateTc.to_csv(plateDir / 'micTimecourse.csv', index=False)
-                print(f'  micTimecourse.csv ({plateTc["hour"].nunique()} timepoints)')
+                plateTc.to_csv(plateDir / f'micTimecourse_{tag}.csv', index=False)
+                print(f'  micTimecourse_{tag}.csv ({plateTc["hour"].nunique()} timepoints)')
 
         if not summaryDf.empty:
             plateSummary = summaryDf[summaryDf['plate'] == plateNo]
             if not plateSummary.empty:
-                plateSummary.to_csv(plateDir / 'endpointSummary.csv', index=False)
-                print(f'  endpointSummary.csv')
+                plateSummary.to_csv(plateDir / f'endpointSummary_{tag}.csv', index=False)
+                print(f'  endpointSummary_{tag}.csv')
 
     # Master CSVs across all plates
     if not indexDf.empty:
-        indexDf.to_csv(outputDir / 'plateIndex.csv', index=False)
+        indexDf.to_csv(outputDir / 'full_plateIndex.csv', index=False)
     if not micDf.empty:
-        micDf.to_csv(outputDir / 'micResults.csv', index=False)
+        micDf.to_csv(outputDir / 'full_micResults.csv', index=False)
     if not tcDf.empty:
-        tcDf.to_csv(outputDir / 'micTimecourse.csv', index=False)
+        tcDf.to_csv(outputDir / 'full_micTimecourse.csv', index=False)
     if not summaryDf.empty:
-        summaryDf.to_csv(outputDir / 'endpointSummary.csv', index=False)
+        summaryDf.to_csv(outputDir / 'full_endpointSummary.csv', index=False)
     print(f'\nMaster CSVs saved to {outputDir}')
     print('Done.')
 
