@@ -34,12 +34,59 @@ python -m micprocessing /path/to/data/directory -o /path/to/output
 | `--plateId` | Path to Plate ID `.xlsx` (auto-detected from data dir, parent, cwd, or cwd/reference) |
 | `--ax1Conc` | Starting antibiotic concentration in ug/mL for column 1 |
 | `--threshold` | MIC threshold as percent of growth range (default: 10) |
+| `--config` | Path to YAML config file (auto-detected from data dir, parent, cwd, or cwd/reference) |
+| `--genConfig` | Generate a template config file from discovered plates and exit |
 
 ### Example
 
 ```bash
 python -m micprocessing ./raw_data -o ./output --ax1Conc 1000
 ```
+
+### Using a config file
+
+Generate a template from your data, fill it in, then run:
+
+```bash
+python -m micprocessing ./raw_data --genConfig
+# Edit mic_config.yaml with strain names and concentrations
+python -m micprocessing ./raw_data --config mic_config.yaml
+```
+
+If a file matching `*config*.yaml` is found in the data directory, its parent, cwd, or `cwd/reference/`, it is loaded automatically (no `--config` flag needed). When a config is present, the Plate ID xlsx is not auto-detected (but can still be passed explicitly with `--plateId`).
+
+## Config file format
+
+A YAML file that assigns strain names, antibiotics, and concentrations per plate. The `defaults` section sets values inherited by all plates unless overridden.
+
+```yaml
+defaults:
+  threshold: 10
+  ax1Conc: null        # starting concentration, ug/mL
+  antibiotic: null
+
+plates:
+  1:
+    strainUpper: 'BS168'
+    strainLower: 'BS920'
+    ax1Conc: 1000
+    antibiotic: 'Spectinomycin'
+  2:
+    strainUpper: 'BS168'
+    strainLower: 'JW1234'
+    ax1Conc: 500
+    antibiotic: 'Kanamycin'
+```
+
+| Field | Scope | Description |
+|---|---|---|
+| `threshold` | defaults | MIC threshold (default 10) |
+| `ax1Conc` | defaults / plate | Starting antibiotic concentration in column 1 |
+| `antibiotic` | defaults / plate | Antibiotic name (included in output) |
+| `strainUpper` | plate | Strain name for rows A-D |
+| `strainLower` | plate | Strain name for rows E-H |
+
+Per-plate values override defaults. CLI `--ax1Conc` and `--threshold` flags are used as fallbacks when not set in the config.
 
 ## Output structure
 
